@@ -28,7 +28,8 @@ def _token_set(text: str) -> set[str]:
     return set(re.findall(r"\w+", text.lower()))
 
 
-def _score(query: str, chunk_text: str, bm25_score: float, cosine_score: float) -> float:
+def _score(query: str, chunk_text: str, bm25_score: float, cosine_score: float,
+           bm25_max: float = 1.0) -> float:
     """Composite relevance score mimicking cross-encoder output (0.0–1.0)."""
     q_tokens = _token_set(query)
     c_tokens = _token_set(chunk_text)
@@ -38,11 +39,11 @@ def _score(query: str, chunk_text: str, bm25_score: float, cosine_score: float) 
     jaccard = len(q_tokens & c_tokens) / len(q_tokens | c_tokens)
     coverage = len(q_tokens & c_tokens) / len(q_tokens)
 
-    # Normalize bm25_score to [0, 1] range (heuristic cap at 20)
-    bm25_norm = min(bm25_score / 20.0, 1.0)
+    # Normalize BM25 relative to batch max (better than fixed cap for small corpora)
+    bm25_norm = min(bm25_score / max(bm25_max, 1.0), 1.0)
 
-    # Weighted composite
-    score = 0.40 * cosine_score + 0.30 * coverage + 0.20 * bm25_norm + 0.10 * jaccard
+    # Weighted composite — mirrors cross-encoder signal hierarchy
+    score = 0.35 * cosine_score + 0.30 * coverage + 0.25 * bm25_norm + 0.10 * jaccard
     return float(np.clip(score, 0.0, 1.0))
 
 
@@ -62,9 +63,11 @@ def rerank(
     if not candidates:
         return [], (time.monotonic() - t0) * 1000, True
 
+    bm25_max = max((c.bm25_score for c in candidates), default=1.0) or 1.0
+
     scored: list[tuple[float, RankedChunk]] = []
     for chunk in candidates:
-        s = _score(query, chunk.text, chunk.bm25_score, chunk.cosine_score)
+        s = _score(query, chunk.text, chunk.bm25_score, chunk.cosine_score, bm25_max)
         scored.append((s, chunk))
 
     scored.sort(key=lambda x: x[0], reverse=True)

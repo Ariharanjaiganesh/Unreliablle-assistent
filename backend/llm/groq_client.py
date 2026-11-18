@@ -70,7 +70,17 @@ async def chat(
 async def triage_classify(query: str) -> dict[str, str]:
     """Fast classification via small model. Returns JSON dict."""
     system = (
-        "You are a query classifier. Respond ONLY with a JSON object with these exact keys:\n"
+        "You are an enterprise query classifier. Respond ONLY with a JSON object.\n\n"
+        "Rules:\n"
+        "- domain='policy' if query mentions batches, LOT numbers, safety protocols, compliance, audit, retention, TIER, HITL, PII, recall, approval\n"
+        "- domain='product' if query mentions SKU numbers, products, licenses, catalog, pricing, ordering\n"
+        "- domain='ops' if query involves executing actions, workflows, form submissions, transactions\n"
+        "- domain='general' ONLY for truly general knowledge not needing internal documents\n"
+        "- complexity='multi_hop' if the query needs to look up specific internal records (batch IDs, SKU IDs, lot numbers)\n"
+        "- complexity='simple' only for basic general knowledge questions\n"
+        "- intent='transaction' if the query asks to execute, recall, submit, trigger, or perform an action\n"
+        "- risk_tier='TIER_3_MUTATE' if the query involves executing workflows, recalls, or state mutations\n\n"
+        "Return JSON with exactly these keys:\n"
         '  "intent": one of [factoid_lookup, reasoning, transaction, out_of_scope]\n'
         '  "domain": one of [policy, product, ops, general]\n'
         '  "risk_tier": one of [TIER_1_READ, TIER_2_COMPUTE, TIER_3_MUTATE]\n'
@@ -125,7 +135,7 @@ async def verify_faithfulness(answer: str, context_chunks: list[str]) -> float:
     if not context_chunks:
         return 0.0
 
-    context_text = "\n".join(f"- {c[:300]}" for c in context_chunks[:4])
+    context_text = "\n\n".join(f"[{i+1}]: {c[:1000]}" for i, c in enumerate(context_chunks[:4]))
     prompt = (
         f"Context:\n{context_text}\n\n"
         f"Answer: {answer}\n\n"

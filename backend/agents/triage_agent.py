@@ -19,8 +19,12 @@ logger = logging.getLogger(__name__)
 def _decide_route(intent: Intent, domain: Domain, risk_tier: RiskTier, complexity: Complexity) -> RouteDecision:
     if intent == Intent.OUT_OF_SCOPE:
         return RouteDecision.REJECT_OOS
-    if intent == Intent.TRANSACTION:
+    if intent == Intent.TRANSACTION or risk_tier == RiskTier.TIER_3_MUTATE:
         return RouteDecision.TRANSACTION_EXEC
+    # Domain-specific queries always need RAG — they reference internal documents
+    if domain in (Domain.POLICY, Domain.PRODUCT, Domain.OPS):
+        return RouteDecision.HYBRID_RAG
+    # Only truly general/simple queries skip RAG
     if intent == Intent.FACTOID_LOOKUP and complexity == Complexity.SIMPLE:
         return RouteDecision.DIRECT_ANSWER
     return RouteDecision.HYBRID_RAG

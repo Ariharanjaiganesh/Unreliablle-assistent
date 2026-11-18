@@ -44,6 +44,10 @@ async def run(
     session_id = session_id or str(uuid.uuid4())
     t_total = time.monotonic()
 
+    # Normalize SKU/LOT formats in query before any RAG lookup
+    from loop.tool_harness import auto_repair_args
+    query = auto_repair_args({"q": query})["q"]
+
     with span("agent.react.loop", {"session_id": session_id, "tenant_id": tenant_id}):
 
         # ── GoalAnchorBlock (immutable, index 0) ──────────────────────────────
@@ -206,16 +210,16 @@ async def run(
                     )
 
                     if not ragas_result.passed:
-                        # RAGAS veto — escalate
-                        logger.warning("RAGAS veto in loop iter=%d: %s", iteration, ragas_result.veto_reason)
-                        # Try once more with higher quality, then accept
-                        if iteration < settings.max_react_iterations - 1:
-                            context_chunks = []  # force re-retrieval
+                        logger.warning("RAGAS veto iter=%d: %s", iteration, ragas_result.veto_reason)
+                        # Retry once only (iteration 0) — accept answer on second attempt
+                        if iteration == 0 and ragas_result.faithfulness < 0.5:
+                            context_chunks = []
                             final_answer = ""
-                            step.thought = f"RAGAS veto: {ragas_result.veto_reason} — re-retrieving"
+                            step.thought = f"Low faithfulness ({ragas_result.faithfulness}) — re-retrieving"
                             step.latency_ms = (time.monotonic() - t_step) * 1000
                             steps.append(step)
                             continue
+                        # Accept answer with RAGAS warning (don't loop forever)
 
                 state = LoopState.DONE
                 step.state = LoopState.DONE

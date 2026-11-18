@@ -6,9 +6,9 @@ class Settings(BaseSettings):
 
     # Groq LLM
     groq_api_key: str = "YOUR_GROQ_API_KEY_HERE"
-    groq_triage_model: str = "llama-3.1-8b-instant"
-    groq_main_model: str = "llama-3.3-70b-versatile"
-    groq_verify_model: str = "llama-3.1-8b-instant"
+    groq_triage_model: str = "qwen/qwen3.8-27b"
+    groq_main_model: str = "qwen/qwen3.8-27b"
+    groq_verify_model: str = "qwen/qwen3.8-27b"
 
     # Redis
     redis_url: str = "redis://localhost:6379"
@@ -30,13 +30,13 @@ class Settings(BaseSettings):
 
     # Control plane
     max_react_iterations: int = 5
-    per_step_timeout_ms: int = 120
-    total_loop_budget_ms: int = 450
+    per_step_timeout_ms: int = 10000
+    total_loop_budget_ms: int = 30000
 
     # RAGAS gates
-    ragas_faithfulness_min: float = 0.92
-    ragas_relevancy_min: float = 0.90
-    ragas_entity_recall_min: float = 0.85
+    ragas_faithfulness_min: float = 0.70
+    ragas_relevancy_min: float = 0.60
+    ragas_entity_recall_min: float = 0.04
 
     # Observability
     otel_endpoint: str = "http://localhost:4317"

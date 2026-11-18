@@ -61,18 +61,30 @@ async def execute(
 ) -> ToolResult:
     t0 = time.monotonic()
 
-    # 1. RBAC tier check
+    # 1. RBAC / HITL tier check
     required_tier = ALLOWED_TOOLS.get(tool_name)
     if required_tier is None:
         return ToolResult(tool_name=tool_name, success=False,
                           error_code="TOOL_001", error_message=f"Unknown tool: {tool_name}",
                           latency_ms=(time.monotonic() - t0) * 1000)
 
-    tier_rank = {RiskTier.TIER_1_READ: 1, RiskTier.TIER_2_COMPUTE: 2, RiskTier.TIER_3_MUTATE: 3}
-    if tier_rank[caller_tier] < tier_rank[required_tier]:
+    # TIER_3 tools always go through HITL gate (STATE_002) — not an RBAC denial
+    if required_tier == RiskTier.TIER_3_MUTATE:
+        from db.database import create_hitl_record, append_audit
+        from models.schemas import HITLRecord
+        repaired = auto_repair_args(raw_args)
+        record = HITLRecord(
+            session_id=session_id,
+            tenant_id=tenant_id,
+            action=tool_name,
+            payload=repaired,
+        )
+        record_id = await create_hitl_record(record)
+        await append_audit("HITL_GATE_TRIGGERED", tenant_id, session_id,
+                           {"tool": tool_name, "hitl_record_id": record_id})
         return ToolResult(tool_name=tool_name, success=False,
-                          error_code="RBAC_001",
-                          error_message=f"Insufficient tier: need {required_tier}, have {caller_tier}",
+                          error_code="STATE_002",
+                          error_message=f"HITL gate required. Record ID: {record_id}. Awaiting reviewer approval.",
                           latency_ms=(time.monotonic() - t0) * 1000)
 
     # 2. Auto-repair args

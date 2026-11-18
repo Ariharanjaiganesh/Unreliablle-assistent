@@ -60,6 +60,12 @@ def _load_sample_knowledge():
         with open(fpath, "r", encoding="utf-8") as f:
             text = f.read()
 
+        # Strip YAML frontmatter so it doesn't dilute retrieval scores
+        if text.startswith("---"):
+            end = text.find("---", 3)
+            if end != -1:
+                text = text[end + 3:].lstrip()
+
         # Split into ~512-token chunks (approx 2000 chars) with 64-token overlap
         chunk_size = 2000
         overlap = 256
